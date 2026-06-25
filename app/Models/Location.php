@@ -20,11 +20,21 @@ class Location extends Model
         'company_id', 'uuid', 'name', 'code', 'status',
     ];
 
+    /**
+     * Boot the model methods
+     */
     protected static function booted(): void
     {
+        // 1. Always keep your local model events clean
         static::creating(function (Location $location) {
+            // Fix the missing UUID issue
             if (empty($location->uuid)) {
                 $location->uuid = (string) Str::uuid();
+            }
+
+            // Fallback safety check if the trait isn't catching it
+            if (empty($location->company_id) && app()->has('currentCompany')) {
+                $location->company_id = app('currentCompany')->id;
             }
         });
     }
@@ -42,19 +52,15 @@ class Location extends Model
         return $this->hasMany(Apartment::class);
     }
 
-    /**
-     * Units belonging to this location, via apartments.
-     * Used for the units_count aggregate — not a direct FK relation.
-     */
     public function units()
     {
         return $this->hasManyThrough(
             Unit::class,
             Apartment::class,
-            'location_id', // FK on apartments
-            'apartment_id', // FK on units
-            'id',           // local key on locations
-            'id'            // local key on apartments
+            'location_id', 
+            'apartment_id', 
+            'id',           
+            'id'            
         );
     }
 }

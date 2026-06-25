@@ -75,9 +75,34 @@ class LocationController extends Controller
         return Inertia::render('locations/create');
     }
 
+    // public function store(Request $request)
+    // {
+    //     Gate::authorize('create', Location::class);
+
+    //     $validated = $request->validate([
+    //         'name' => 'required|string|max:255',
+    //         'code' => [
+    //             'required',
+    //             'string',
+    //             'max:32',
+    //             \Illuminate\Validation\Rule::unique('locations', 'code')
+    //                 ->where('company_id', app('currentCompany')->id)
+    //                 ->whereNull('deleted_at'),
+    //         ],
+    //         'status' => 'required|in:Active,Inactive',
+    //     ]);
+
+    //     Location::create($validated);
+
+    //     return redirect()->route('locations.index')->with('success', 'Location created successfully.');
+    // }
+    
     public function store(Request $request)
     {
         Gate::authorize('create', Location::class);
+        
+        // Safely check if currentCompany is bound, otherwise fallback to null or user's company
+        $currentCompany = app()->has('currentCompany') ? app('currentCompany') : 1;
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -86,11 +111,20 @@ class LocationController extends Controller
                 'string',
                 'max:32',
                 \Illuminate\Validation\Rule::unique('locations', 'code')
-                    ->where('company_id', app('currentCompany')->id)
+                    ->where(function ($query) use ($currentCompany) {
+                        if ($currentCompany) {
+                            $query->where('company_id', $currentCompany);
+                        }
+                    })
                     ->whereNull('deleted_at'),
             ],
             'status' => 'required|in:Active,Inactive',
         ]);
+
+        // Force inject the company id since it's not in the $validated fields
+        if ($currentCompany) {
+            $validated['company_id'] = $currentCompany;
+        }
 
         Location::create($validated);
 
