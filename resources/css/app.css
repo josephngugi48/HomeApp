@@ -1,0 +1,174 @@
+@import 'tailwindcss';
+
+@import "tw-animate-css";
+
+@source '../views';
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+    --font-sans:
+        'Instrument Sans', ui-sans-serif, system-ui, sans-serif,
+        'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
+        'Noto Color Emoji';
+
+    --radius-lg: var(--radius);
+    --radius-md: calc(var(--radius) - 2px);
+    --radius-sm: calc(var(--radius) - 4px);
+
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+
+    --color-card: var(--card);
+    --color-card-foreground: var(--card-foreground);
+
+    --color-popover: var(--popover);
+    --color-popover-foreground: var(--popover-foreground);
+
+    --color-primary: var(--primary);
+    --color-primary-foreground: var(--primary-foreground);
+
+    --color-secondary: var(--secondary);
+    --color-secondary-foreground: var(--secondary-foreground);
+
+    --color-muted: var(--muted);
+    --color-muted-foreground: var(--muted-foreground);
+
+    --color-accent: var(--accent);
+    --color-accent-foreground: var(--accent-foreground);
+
+    --color-destructive: var(--destructive);
+    --color-destructive-foreground: var(--destructive-foreground);
+
+    --color-border: var(--border);
+    --color-input: var(--input);
+    --color-ring: var(--ring);
+
+    --color-chart-1: var(--chart-1);
+    --color-chart-2: var(--chart-2);
+    --color-chart-3: var(--chart-3);
+    --color-chart-4: var(--chart-4);
+    --color-chart-5: var(--chart-5);
+
+    --color-sidebar: var(--sidebar);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar-primary: var(--sidebar-primary);
+    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-sidebar-border: var(--sidebar-border);
+    --color-sidebar-ring: var(--sidebar-ring);
+}
+
+:root {
+    /* Light Mode - Using KUSCCO Brand colors */
+    /* #006738 = KUSCCO Green, #FDB913 = KUSCCO Gold, #f0f7f4 = Light Background */
+    
+    --background: #f9fafb;                        /* gray-50 background */
+    --foreground: #006738;                        /* KUSCCO Green for text */
+    
+    --card: #ffffff;                              /* Pure White */
+    --card-foreground: #006738;                   /* KUSCCO Green */
+    
+    --popover: #ffffff;                           /* Pure White */
+    --popover-foreground: #006738;                /* KUSCCO Green */
+    
+    --primary: #006738;                           /* KUSCCO Green - main brand */
+    --primary-foreground: #ffffff;                /* White */
+    
+    --secondary: #FDB913;                         /* KUSCCO Gold */
+    --secondary-foreground: #006738;              /* KUSCCO Green */
+    
+    --muted: #f0f7f4;                             /* Light green tint */
+    --muted-foreground: #6b7280;                  /* gray-500 */
+    
+    --accent: #FDB913;                            /* KUSCCO Gold */
+    --accent-foreground: #006738;                 /* KUSCCO Green */
+    
+    --destructive: #dc2626;                       /* Red */
+    --destructive-foreground: #ffffff;            /* White */
+    
+    --border: #e2e8f0;                            /* slate-200 */
+    --input: #e2e8f0;                             /* slate-200 */
+    --ring: #006738;                              /* KUSCCO Green */
+    
+    /* Chart colors using the brand palette */
+    --chart-1: #006738;                           /* KUSCCO Green */
+    --chart-2: #FDB913;                           /* KUSCCO Gold */
+    --chart-3: #166534;                           /* Darker Green */
+    --chart-4: #ca8a04;                           /* Darker Gold */
+    --chart-5: #dcfce7;                           /* Very Light Green */
+    
+    --radius: 0.75rem;
+    
+    /* Sidebar colors */
+    --sidebar: #f0f7f4;                           /* Light green tint */
+    --sidebar-foreground: #006738;                /* KUSCCO Green */
+    --sidebar-primary: #006738;                   /* KUSCCO Green */
+    --sidebar-primary-foreground: #ffffff;        /* White */
+    --sidebar-accent: #e1f0e9;                    /* Subtle green accent */
+    --sidebar-accent-foreground: #006738;         /* KUSCCO Green */
+    --sidebar-border: #e2e8f0;                    /* slate-200 */
+    --sidebar-ring: #006738;                      /* KUSCCO Green */
+    
+}
+
+.dark {
+    /* Dark Mode - KUSCCO Themed */
+    
+    --background: #061810;                        /* Very deep green-black */
+    --foreground: #f0f7f4;                        /* Near white green */
+    
+    --card: #0c2a1e;                              /* Deep green */
+    --card-foreground: #ffffff;                   /* White */
+    
+    --popover: #0c2a1e;                           /* Deep green */
+    --popover-foreground: #ffffff;                /* White */
+    
+    --primary: #FDB913;                           /* KUSCCO Gold (stands out in dark) */
+    --primary-foreground: #061810;                /* Dark base */
+    
+    --secondary: #006738;                         /* KUSCCO Green */
+    --secondary-foreground: #ffffff;              /* White */
+    
+    --muted: #0d2e21;                             /* Deep green */
+    --muted-foreground: #94a3b8;                  /* slate-400 */
+    
+    --accent: #FDB913;                            /* KUSCCO Gold */
+    --accent-foreground: #061810;                 /* Dark base */
+    
+    --destructive: #ef4444;                       /* Red */
+    --destructive-foreground: #ffffff;            /* White */
+    
+    --border: #1e3a30;                            /* Dark border */
+    --input: #1e3a30;                             /* Dark border */
+    --ring: #FDB913;                              /* KUSCCO Gold */
+    
+    /* Chart colors for dark mode */
+    --chart-1: #FDB913;                           /* KUSCCO Gold */
+    --chart-2: #006738;                           /* KUSCCO Green */
+    --chart-3: #fbbf24;                           /* Amber */
+    --chart-4: #22c55e;                           /* Green */
+    --chart-5: #86efac;                           /* Light Green */
+    
+    /* Sidebar colors for dark mode */
+    --sidebar: #04120c;                           /* Darker than base */
+    --sidebar-foreground: #f0f7f4;                /* Near white */
+    --sidebar-primary: #FDB913;                   /* KUSCCO Gold */
+    --sidebar-primary-foreground: #061810;        /* Dark base */
+    --sidebar-accent: #0c2a1e;                    /* Deep green */
+    --sidebar-accent-foreground: #ffffff;         /* White */
+    --sidebar-border: #1e3a30;                    /* Dark border */
+    --sidebar-ring: #FDB913;                      /* KUSCCO Gold */
+}
+
+@layer base {
+    * {
+        @apply border-border;
+    }
+
+    body {
+        @apply bg-background text-foreground;
+    }
+}/* Hide number input spinners */
