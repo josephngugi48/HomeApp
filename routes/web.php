@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Auth\EmailVerificationController;
 use App\Http\Controllers\Dashboard\DashboardController;
+use App\Http\Controllers\Locations\LocationController;
 use App\Http\Controllers\RolesAndPermissions\RolesAndPermissionsController;
 use App\Http\Controllers\Settings\SystemSettingsController;
 use App\Http\Controllers\Users\UsersController;
@@ -48,6 +49,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->middleware('mfa')
             ->name('dashboard');
 
+    });
+    
+    // Locations management routes
+    Route::middleware('permission:module locations')->group(function () {
+        Route::get('/locations', [LocationController::class, 'index'])->name('locations.index');
+        Route::post('/locations', [LocationController::class, 'store'])->name('locations.store');
+        Route::put('/locations/{location}', [LocationController::class, 'update'])->name('locations.update');
+        Route::delete('/locations/{location}', [LocationController::class, 'destroy'])->name('locations.destroy');
     });
 
     // Roles and permissions management routes
