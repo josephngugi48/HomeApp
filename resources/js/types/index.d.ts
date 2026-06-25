@@ -131,3 +131,15 @@ export interface Activity {
     created_at: string;
     updated_at: string;
 }
+
+export interface Location {
+    id: number;
+    uuid: string;
+    name: string;
+    code: string;
+    status: "Active" | "Inactive";
+    apartments_count?: number;
+    units_count?: number;
+    created_at: string;
+    can?: { update?: boolean; delete?: boolean };
+}

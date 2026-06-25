@@ -3,57 +3,141 @@
 namespace App\Http\Controllers\Locations;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Locations\StoreLocationRequest;
-use App\Http\Requests\Locations\UpdateLocationRequest;
-use App\Http\Resources\LocationResource;
 use App\Models\Location;
-use App\Services\LocationService;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
-use Inertia\Response;
 
 class LocationController extends Controller
 {
-    public function __construct(private readonly LocationService $locations)
-    {
-    }
-
-    public function index(Request $request): Response
+    public function index(Request $request)
     {
         Gate::authorize('viewAny', Location::class);
 
-        $locations = $this->locations->paginate($request);
+        $perPage = $request->integer('per_page', 10);
+        $search = $request->string('search')->toString();
+        $status = $request->string('status')->toString();
+        $sortBy = $request->string('sort_by')->toString();
+        $sortDirection = $request->string('sort_direction', 'asc')->toString();
+
+        $query = Location::query()
+            ->withCount(['apartments', 'units']);
+
+        // 🔍 Search (name or code)
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('code', 'like', "%{$search}%");
+            });
+        }
+
+        // 🟢 Filter by status
+        if ($status) {
+            $query->where('status', $status);
+        }
+
+        // ↕ Sorting (safe)
+        $allowedSorts = ['id', 'name', 'code', 'status', 'created_at'];
+
+        if ($sortBy && in_array($sortBy, $allowedSorts)) {
+            $query->orderBy($sortBy, $sortDirection === 'desc' ? 'desc' : 'asc');
+        } else {
+            $query->orderBy('name', 'asc');
+        }
+
+        $locations = $query->paginate($perPage)->withQueryString();
+        $locations->getCollection()->transform(function ($location) {
+            $location->can = [
+                'update' => Gate::allows('update', $location),
+                'delete' => Gate::allows('delete', $location),
+            ];
+            return $location;
+        });
 
         return Inertia::render('locations/index', [
-            'locations' => LocationResource::collection($locations),
-            'filters' => $request->only(['search', 'status', 'sort_by', 'sort_direction']),
+            'locations' => $locations,
+            'filters' => [
+                'search' => $search,
+                'status' => $status,
+                'sort_by' => $sortBy,
+                'sort_direction' => $sortDirection,
+            ],
             'can' => [
                 'create' => Gate::allows('create', Location::class),
             ],
         ]);
     }
 
-    public function store(StoreLocationRequest $request): RedirectResponse
+    public function create()
     {
-        $this->locations->create($request->validated());
+        Gate::authorize('create', Location::class);
+
+        return Inertia::render('locations/create');
+    }
+
+    public function store(Request $request)
+    {
+        Gate::authorize('create', Location::class);
+
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'code' => [
+                'required',
+                'string',
+                'max:32',
+                \Illuminate\Validation\Rule::unique('locations', 'code')
+                    ->where('company_id', app('currentCompany')->id)
+                    ->whereNull('deleted_at'),
+            ],
+            'status' => 'required|in:Active,Inactive',
+        ]);
+
+        Location::create($validated);
 
         return redirect()->route('locations.index')->with('success', 'Location created successfully.');
     }
 
-    public function update(UpdateLocationRequest $request, Location $location): RedirectResponse
+    public function edit(Location $location)
     {
-        $this->locations->update($location, $request->validated());
+        Gate::authorize('update', $location);
+
+        return Inertia::render('locations/edit', [
+            'location' => $location,
+        ]);
+    }
+
+    public function update(Request $request, Location $location)
+    {
+        Gate::authorize('update', $location);
+
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'code' => [
+                'required',
+                'string',
+                'max:32',
+                \Illuminate\Validation\Rule::unique('locations', 'code')
+                    ->where('company_id', app('currentCompany')->id)
+                    ->whereNull('deleted_at')
+                    ->ignore($location->id),
+            ],
+            'status' => 'required|in:Active,Inactive',
+        ]);
+
+        $location->update($validated);
 
         return redirect()->route('locations.index')->with('success', 'Location updated successfully.');
     }
 
-    public function destroy(Location $location): RedirectResponse
+    public function destroy(Location $location)
     {
         Gate::authorize('delete', $location);
 
-        $this->locations->delete($location);
+        if ($location->apartments()->exists()) {
+            return back()->with('error', 'Cannot delete a location that still has apartments assigned to it.');
+        }
+
+        $location->delete();
 
         return redirect()->route('locations.index')->with('success', 'Location deleted successfully.');
     }
