@@ -74,8 +74,22 @@ class User extends Authenticatable implements MustVerifyEmail
             'intial_two_factor_confirmed_at' => 'datetime',
         ];
     }
+
     public function status(): BelongsTo
     {
         return $this->belongsTo(Status::class);
+    }
+
+    //
+    public function companies()
+    {
+        return $this->belongsToMany(Company::class, 'company_user')
+            ->withPivot('status', 'joined_at', 'invited_by')
+            ->withTimestamps();
+    }
+
+    public function tenantProfile()
+    {
+        return $this->hasOne(TenantProfile::class);
     }
 }

@@ -7,10 +7,14 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
+use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 class Lease extends Model
 {
-    use HasFactory, SoftDeletes, BelongsToCompany;
+    use HasFactory, SoftDeletes, BelongsToCompany, LogsActivity;
+
+    public const STATUSES = ['active', 'ended', 'terminated'];
 
     protected $fillable = [
         'company_id', 'uuid', 'tenant_id', 'unit_id',
@@ -36,9 +40,12 @@ class Lease extends Model
         });
     }
 
-    public function company()
+    public function getActivitylogOptions(): LogOptions
     {
-        return $this->belongsTo(Company::class);
+        return LogOptions::defaults()
+            ->logFillable()
+            ->logOnlyDirty()
+            ->dontSubmitEmptyLogs();
     }
 
     public function tenant()
@@ -54,30 +61,5 @@ class Lease extends Model
     public function createdBy()
     {
         return $this->belongsTo(User::class, 'created_by');
-    }
-
-    public function invoices()
-    {
-        return $this->hasMany(Invoice::class);
-    }
-
-    public function payments()
-    {
-        return $this->hasMany(Payment::class);
-    }
-
-    public function issues()
-    {
-        return $this->hasMany(Issue::class);
-    }
-
-    public function notices()
-    {
-        return $this->hasMany(Notice::class);
-    }
-
-    public function maintenanceRequests()
-    {
-        return $this->hasMany(MaintenanceRequest::class);
     }
 }

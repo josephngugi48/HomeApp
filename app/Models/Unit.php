@@ -7,10 +7,12 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
+use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 class Unit extends Model
 {
-    use HasFactory, SoftDeletes, BelongsToCompany;
+    use HasFactory, SoftDeletes, BelongsToCompany, LogsActivity;
 
     protected $fillable = [
         'company_id', 'apartment_id', 'uuid', 'unit_no', 'floor',
@@ -31,6 +33,14 @@ class Unit extends Model
         });
     }
 
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logFillable()
+            ->logOnlyDirty()
+            ->dontSubmitEmptyLogs();
+    }
+
     public function apartment()
     {
         return $this->belongsTo(Apartment::class);
@@ -41,6 +51,15 @@ class Unit extends Model
         return $this->hasMany(Lease::class);
     }
 
+    /**
+     * TEMPORARY CAVEAT: until the Leases module ships, `status` is a
+     * manually-set field on this model and has no relationship to
+     * activeLease() below — it can drift from reality (e.g. marked
+     * "Occupied" with no actual lease record). Once Leases exists,
+     * revisit whether `status` should become a computed accessor
+     * derived from activeLease()->exists() instead of a stored column,
+     * or whether lease creation/termination should auto-sync this column.
+     */
     public function activeLease()
     {
         return $this->hasOne(Lease::class)->where('status', 'active');

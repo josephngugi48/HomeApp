@@ -2,14 +2,13 @@
 
 namespace App\Models;
 
-use App\Traits\BelongsToCompany;
 use Illuminate\Database\Eloquent\Model;
 
 class WalletTransaction extends Model
 {
-    use BelongsToCompany;
+    public const TYPES = ['deposit', 'payment', 'refund', 'adjustment'];
 
-    public $timestamps = false; // only created_at
+    public $timestamps = false;
 
     protected $fillable = [
         'wallet_id', 'type', 'amount', 'ref', 'occurred_at', 'meta',

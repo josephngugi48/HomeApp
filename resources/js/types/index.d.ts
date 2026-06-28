@@ -143,3 +143,157 @@ export interface Location {
     created_at: string;
     can?: { update?: boolean; delete?: boolean };
 }
+
+export interface Apartment {
+    id: number;
+    uuid: string;
+    name: string;
+    code: string;
+    status: "Active" | "Inactive";
+    location_id: number;
+    landlord_id: number | null;
+    caretaker_id: number | null;
+    location?: { id: number; name: string; code: string };
+    landlord?: { id: number; name: string } | null;
+    caretaker?: { id: number; name: string } | null;
+    units_count?: number;
+    created_at: string;
+    can?: { update?: boolean; delete?: boolean };
+}
+
+export interface Unit {
+    id: number;
+    uuid: string;
+    apartment_id: number;
+    unit_no: string;
+    floor: number | null;
+    bedrooms: number | null;
+    rent: string; // decimal cast returns string from Eloquent/JSON
+    service_charge: string | null;
+    status: "Occupied" | "Vacant" | "Reserved";
+    apartment?: { id: number; name: string; code: string };
+    created_at: string;
+    can?: { update?: boolean; delete?: boolean };
+}
+
+export interface TenantProfile {
+    id: number;
+    user_id: number;
+    national_id: string;
+    kra_pin: string | null;
+    date_of_birth: string | null;
+    marital_status: string | null;
+    photo_path: string | null;
+    next_of_kin_name: string | null;
+    next_of_kin_phone: string | null;
+    next_of_kin_relationship: string | null;
+    next_of_kin_address: string | null;
+}
+
+export interface Tenant {
+    id: number;
+    name: string;
+    email: string;
+    created_at: string;
+    tenant_profile?: TenantProfile | null;
+    can?: { update?: boolean; delete?: boolean };
+}
+
+export interface Lease {
+    id: number;
+    uuid: string;
+    tenant_id: number;
+    unit_id: number;
+    start_date: string;
+    end_date: string | null;
+    rent: string;
+    service_charge: string | null;
+    deposit: string | null;
+    status: "active" | "ended" | "terminated";
+    vacate_notice_at: string | null;
+    tenant?: { id: number; name: string; email: string };
+    unit?: {
+        id: number;
+        unit_no: string;
+        apartment_id: number;
+        apartment?: { id: number; name: string };
+        rent?: string;
+        service_charge?: string | null;
+    };
+    created_at: string;
+    can?: { update?: boolean; terminate?: boolean; delete?: boolean };
+}
+
+export interface InvoiceItem {
+    id: number;
+    type: "rent" | "service" | "water" | "electricity" | "penalty" | "misc";
+    description: string;
+    quantity: string;
+    unit_price: string;
+    amount: string;
+}
+
+export interface Invoice {
+    id: number;
+    uuid: string;
+    number: string;
+    lease_id: number;
+    tenant_id: number;
+    unit_id: number;
+    issue_date: string;
+    due_date: string;
+    subtotal: string;
+    total: string;
+    balance: string;
+    status: "draft" | "unpaid" | "partial" | "paid" | "overdue";
+    tenant?: { id: number; name: string; email: string };
+    unit?: { id: number; unit_no: string; apartment?: { id: number; name: string } };
+    lease?: { id: number; start_date: string; end_date: string | null };
+    items?: InvoiceItem[];
+    created_at: string;
+    can?: { update?: boolean; delete?: boolean };
+}
+
+export interface PaymentRecord {
+    id: number;
+    uuid: string;
+    ref: string;
+    tenant_id: number;
+    invoice_id: number | null;
+    amount: string;
+    method: "mpesa" | "bank" | "cash" | "wallet" | "adjustment";
+    external_ref: string | null;
+    paid_at: string;
+    reversed_at: string | null;
+    tenant?: { id: number; name: string; email: string };
+    invoice?: { id: number; number: string } | null;
+    created_at: string;
+    can?: { reverse?: boolean };
+}
+
+export interface PayableInvoice {
+    id: number;
+    number: string;
+    tenant_id: number;
+    unit_id: number;
+    total: string;
+    balance: string;
+    tenant?: { id: number; name: string; email: string };
+    unit?: { id: number; unit_no: string };
+}
+
+export interface WalletRecord {
+    id: number;
+    tenant_id: number;
+    balance: string;
+    tenant?: { id: number; name: string; email: string };
+}
+
+export interface WalletTransactionRecord {
+    id: number;
+    type: "deposit" | "payment" | "refund" | "adjustment";
+    amount: string; // signed
+    ref: string;
+    occurred_at: string;
+    meta: Record<string, any> | null;
+}

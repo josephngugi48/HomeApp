@@ -9,6 +9,8 @@ class MpesaRequest extends Model
 {
     use BelongsToCompany;
 
+    public const STATUSES = ['pending', 'success', 'failed', 'cancelled'];
+
     protected $fillable = [
         'company_id', 'tenant_id', 'invoice_id',
         'checkout_request_id', 'merchant_request_id',
@@ -28,5 +30,10 @@ class MpesaRequest extends Model
     public function invoice()
     {
         return $this->belongsTo(Invoice::class);
+    }
+
+    public function isPending(): bool
+    {
+        return $this->status === 'pending';
     }
 }

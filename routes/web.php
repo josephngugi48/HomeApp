@@ -3,6 +3,14 @@
 use App\Http\Controllers\Auth\EmailVerificationController;
 use App\Http\Controllers\Dashboard\DashboardController;
 use App\Http\Controllers\Locations\LocationController;
+use App\Http\Controllers\Apartments\ApartmentController;
+use App\Http\Controllers\Units\UnitController;
+use App\Http\Controllers\Tenants\TenantController;
+use App\Http\Controllers\Leases\LeaseController;
+use App\Http\Controllers\Invoices\InvoiceController;
+use App\Http\Controllers\Payments\PaymentController;
+use App\Http\Controllers\Payments\MpesaController;
+use App\Http\Controllers\Wallet\WalletController;
 use App\Http\Controllers\RolesAndPermissions\RolesAndPermissionsController;
 use App\Http\Controllers\Settings\SystemSettingsController;
 use App\Http\Controllers\Users\UsersController;
@@ -33,6 +41,15 @@ Route::middleware('auth')->group(function () {
 
 });
 
+// Public webhook — Safaricom calls this directly
+// Safaricom's POST with a 419 before your controller code even runs.
+Route::post('/mpesa/callback', [MpesaController::class, 'callback'])->name('mpesa.callback');
+
+// Initiate an STK push for an invoice 
+Route::middleware('auth')->group(function () {
+    Route::post('/mpesa/stk-push', [MpesaController::class, 'stkPush'])->name('mpesa.stk-push');
+});
+
 Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('/tfa_prompt', [DashboardTwoFactorAuthenticationController::class, 'tfa_notice'])
@@ -59,6 +76,72 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/locations/{location}/edit', [LocationController::class, 'edit'])->name('locations.edit');
         Route::put('/locations/{location}', [LocationController::class, 'update'])->name('locations.update');
         Route::delete('/locations/{location}', [LocationController::class, 'destroy'])->name('locations.destroy');
+    });
+
+    // Apartments 
+    Route::middleware('permission:module apartments')->group(function () {
+        Route::get('/apartments', [ApartmentController::class, 'index'])->name('apartments.index');
+        Route::get('/apartments/create', [ApartmentController::class, 'create'])->name('apartments.create');
+        Route::post('/apartments', [ApartmentController::class, 'store'])->name('apartments.store');
+        Route::get('/apartments/{apartment}/edit', [ApartmentController::class, 'edit'])->name('apartments.edit');
+        Route::put('/apartments/{apartment}', [ApartmentController::class, 'update'])->name('apartments.update');
+        Route::delete('/apartments/{apartment}', [ApartmentController::class, 'destroy'])->name('apartments.destroy');
+    });
+
+    // Units:
+    Route::middleware('permission:module units')->group(function () {
+        Route::get('/units', [UnitController::class, 'index'])->name('units.index');
+        Route::get('/units/create', [UnitController::class, 'create'])->name('units.create');
+        Route::post('/units', [UnitController::class, 'store'])->name('units.store');
+        Route::get('/units/{unit}/edit', [UnitController::class, 'edit'])->name('units.edit');
+        Route::put('/units/{unit}', [UnitController::class, 'update'])->name('units.update');
+        Route::delete('/units/{unit}', [UnitController::class, 'destroy'])->name('units.destroy');
+    });
+
+    // Tenants:
+    Route::middleware('permission:module tenants')->group(function () {
+        Route::get('/tenants', [TenantController::class, 'index'])->name('tenants.index');
+        Route::get('/tenants/create', [TenantController::class, 'create'])->name('tenants.create');
+        Route::post('/tenants', [TenantController::class, 'store'])->name('tenants.store');
+        Route::get('/tenants/{tenant}/edit', [TenantController::class, 'edit'])->name('tenants.edit');
+        Route::put('/tenants/{tenant}', [TenantController::class, 'update'])->name('tenants.update');
+        Route::delete('/tenants/{tenant}', [TenantController::class, 'destroy'])->name('tenants.destroy');
+    });
+
+    // Leases
+    Route::middleware('permission:module leases')->group(function () {
+        Route::get('/leases', [LeaseController::class, 'index'])->name('leases.index');
+        Route::get('/leases/create', [LeaseController::class, 'create'])->name('leases.create');
+        Route::post('/leases', [LeaseController::class, 'store'])->name('leases.store');
+        Route::get('/leases/{lease}/edit', [LeaseController::class, 'edit'])->name('leases.edit');
+        Route::put('/leases/{lease}', [LeaseController::class, 'update'])->name('leases.update');
+        Route::post('/leases/{lease}/terminate', [LeaseController::class, 'terminate'])->name('leases.terminate');
+        Route::delete('/leases/{lease}', [LeaseController::class, 'destroy'])->name('leases.destroy');
+    });
+
+    // Invoices
+    Route::middleware('permission:module invoices')->group(function () {
+        Route::get('/invoices', [InvoiceController::class, 'index'])->name('invoices.index');
+        Route::get('/invoices/create', [InvoiceController::class, 'create'])->name('invoices.create');
+        Route::post('/invoices', [InvoiceController::class, 'store'])->name('invoices.store');
+        Route::get('/invoices/{invoice}', [InvoiceController::class, 'show'])->name('invoices.show');
+        Route::delete('/invoices/{invoice}', [InvoiceController::class, 'destroy'])->name('invoices.destroy');
+    });
+
+    // Payments
+    Route::middleware('permission:module payments')->group(function () {
+        Route::get('/payments', [PaymentController::class, 'index'])->name('payments.index');
+        Route::get('/payments/create', [PaymentController::class, 'create'])->name('payments.create');
+        Route::post('/payments', [PaymentController::class, 'store'])->name('payments.store');
+        Route::post('/payments/{payment}/reverse', [PaymentController::class, 'reverse'])->name('payments.reverse');
+    });
+
+    // Wallet
+    Route::middleware('permission:module wallet')->group(function () {
+        Route::get('/wallet', [WalletController::class, 'index'])->name('wallet.index');
+        Route::get('/wallet/{wallet}', [WalletController::class, 'show'])->name('wallet.show');
+        Route::post('/wallet/{wallet}/deposit', [WalletController::class, 'deposit'])->name('wallet.deposit');
+        Route::post('/wallet/{wallet}/apply', [WalletController::class, 'applyToInvoice'])->name('wallet.apply');
     });
 
     // Roles and permissions management routes

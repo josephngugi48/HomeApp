@@ -2,12 +2,11 @@
 
 namespace App\Models;
 
-use App\Traits\BelongsToCompany;
 use Illuminate\Database\Eloquent\Model;
 
 class InvoiceItem extends Model
 {
-    use BelongsToCompany;
+    public const TYPES = ['rent', 'service', 'water', 'electricity', 'penalty', 'misc'];
 
     protected $fillable = [
         'invoice_id', 'type', 'description', 'quantity', 'unit_price', 'amount',

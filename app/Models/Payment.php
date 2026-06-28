@@ -7,10 +7,14 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
+use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 class Payment extends Model
 {
-    use HasFactory, SoftDeletes, BelongsToCompany;
+    use HasFactory, SoftDeletes, BelongsToCompany, LogsActivity;
+
+    public const METHODS = ['mpesa', 'bank', 'cash', 'wallet', 'adjustment'];
 
     protected $fillable = [
         'company_id', 'uuid', 'ref', 'tenant_id', 'invoice_id',
@@ -33,6 +37,14 @@ class Payment extends Model
         });
     }
 
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logFillable()
+            ->logOnlyDirty()
+            ->dontSubmitEmptyLogs();
+    }
+
     public function tenant()
     {
         return $this->belongsTo(User::class, 'tenant_id');
@@ -51,5 +63,10 @@ class Payment extends Model
     public function createdBy()
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function isReversed(): bool
+    {
+        return $this->reversed_at !== null;
     }
 }
