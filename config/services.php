@@ -43,5 +43,16 @@ return [
         'callback_url' => env('MPESA_CALLBACK_URL'),
         'env' => env('MPESA_ENV', 'sandbox'),
     ],
+    
+    'africastalking' => [
+        'username' => env('AT_USERNAME'),
+        'key' => env('AT_API_KEY'),
+        'sender_id' => env('AT_FROM'),
+    ],
+    'whatsapp' => [
+        'phone_number_id' => env('WHATSAPP_PHONE_NUMBER_ID'),
+        'access_token' => env('WHATSAPP_ACCESS_TOKEN'),
+        'verify_token' => env('WHATSAPP_VERIFY_TOKEN'),
+    ],
 
 ];

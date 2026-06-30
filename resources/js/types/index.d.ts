@@ -367,6 +367,47 @@ export interface DashboardKpis {
     resolvedMaintenance: number;
 }
 
+export interface NeedsAttention {
+    items: {
+        type: string;
+        title: string;
+        subtitle: string;
+        href: string;
+        severity: 'high' | 'medium' | 'low';
+    }[];
+    totalOverdueInvoices: number;
+    totalPendingNotices: number;
+    totalUrgentMaintenance: number;
+}
+
+export interface RevenueData {
+    month: string;
+    billed: number;
+    collected: number;
+}
+
+export interface PaymentMethodData {
+    method: string;
+    total: number;
+}
+
+export interface OccupancyData {
+    month: string;
+    occupancy: number;
+}
+
+export interface MaintenanceStatusData {
+    status: string;
+    count: number;
+}
+
+export interface DashboardCharts {
+    revenueTrend: RevenueData[];
+    paymentMethods: PaymentMethodData[];
+    occupancyTrend: OccupancyData[];
+    maintenanceStatus: MaintenanceStatusData[];
+}
+
 export interface NeedsAttentionItem {
     type: "overdue_invoice" | "vacating_notice" | "maintenance";
     title: string;
@@ -375,9 +416,56 @@ export interface NeedsAttentionItem {
     severity: "high" | "medium";
 }
 
-export interface NeedsAttention {
-    items: NeedsAttentionItem[];
-    totalOverdueInvoices: number;
-    totalPendingNotices: number;
-    totalUrgentMaintenance: number;
+export interface ChannelStatus {
+    status: "pending" | "sent" | "delivered" | "failed";
+    sent_at?: string;
+    delivered_at?: string;
+    error?: string;
+}
+
+export interface BroadcastRecipientRecord {
+    id: number;
+    resolved_name: string;
+    resolved_email: string | null;
+    resolved_phone: string | null;
+    channel_statuses: Record<string, ChannelStatus>;
+}
+
+export interface BroadcastRecord {
+    id: number;
+    title: string;
+    body: string;
+    channels: ("sms" | "email" | "whatsapp")[];
+    status: "draft" | "sending" | "sent" | "failed";
+    sent_count: number;
+    delivered_count: number;
+    sent_at: string | null;
+    created_by?: { id: number; name: string };
+    created_at: string;
+    can?: { delete?: boolean };
+}
+
+export interface ContactListOption {
+    id: number;
+    name: string;
+    contact_count: number;
+}
+
+export interface ApartmentOption {
+    id: number;
+    name: string;
+}
+
+export interface FinancialKpis { billed: number; collected: number; outstanding: number; }
+export interface RevenueTrendPoint { m: string; billed: number; collected: number; }
+export interface AgeingBucket { bucket: string; value: number; }
+export interface OccupancyKpis { totalUnits: number; occupied: number; vacant: number; occupancyPct: number; }
+export interface ApartmentOccupancyRow { id: number; name: string; units: number; occupied: number; vacant: number; }
+export interface TenantReportRow {
+    id: number; name: string; unit: string | null; apartment: string | null;
+    lease_status: string | null; move_in: string | null; balance: number;
+}
+export interface MaintenanceReportRow {
+    id: number; number: string; category: string; priority: string; status: string;
+    raised_at: string; tenant?: { name: string }; unit?: { unit_no: string }; assignee?: { name: string } | null;
 }

@@ -1,7 +1,7 @@
 <?php
 
 use App\Http\Controllers\Auth\EmailVerificationController;
-use App\Http\Controllers\Dashboard\DashboardController;
+use App\Http\Controllers\Dashboard\DashboardRouterController;
 use App\Http\Controllers\Locations\LocationController;
 use App\Http\Controllers\Apartments\ApartmentController;
 use App\Http\Controllers\Units\UnitController;
@@ -19,6 +19,12 @@ use App\Http\Controllers\Settings\SystemSettingsController;
 use App\Http\Controllers\Users\UsersController;
 use App\Http\Controllers\Admin\ActivityLogController;
 use App\Http\Controllers\Notifications\NotificationsController;
+use App\Http\Controllers\Reports\ReportController;
+//
+use App\Http\Controllers\Broadcasts\BroadcastController;
+use App\Http\Controllers\Broadcasts\SmsDeliveryController;
+use App\Http\Controllers\Broadcasts\WhatsAppWebhookController;
+//
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\WelcomeController;
 use Illuminate\Support\Facades\URL;
@@ -44,7 +50,7 @@ Route::middleware('auth')->group(function () {
 
 });
 
-// Public webhook — Safaricom calls this directly
+// Public webhook — Safaricom
 // Safaricom's POST with a 419 before your controller code even runs.
 Route::post('/mpesa/callback', [MpesaController::class, 'callback'])->name('mpesa.callback');
 
@@ -52,6 +58,11 @@ Route::post('/mpesa/callback', [MpesaController::class, 'callback'])->name('mpes
 Route::middleware('auth')->group(function () {
     Route::post('/mpesa/stk-push', [MpesaController::class, 'stkPush'])->name('mpesa.stk-push');
 });
+
+// Public webhooks - Broadcast
+Route::post('/webhooks/sms/delivery', [SmsDeliveryController::class, 'handle'])->name('webhooks.sms.delivery');
+Route::get('/webhooks/whatsapp', [WhatsAppWebhookController::class, 'verify']);
+Route::post('/webhooks/whatsapp', [WhatsAppWebhookController::class, 'handle'])->name('webhooks.whatsapp');
 
 Route::middleware(['auth', 'verified'])->group(function () {
 
@@ -63,14 +74,20 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('mfa.skip');
 
     // Dashboard routes
-    Route::middleware('permission:module dashboard')->group(function () {
-        
-        // Dashboard route
-        Route::get('/dashboard', [DashboardController::class, 'index'])
+    Route::middleware(['auth', 'verified'])->group(function () {
+        Route::get('/dashboard', [DashboardRouterController::class, 'index'])
             ->middleware('mfa')
             ->name('dashboard');
-
+        // ... other routes ...
     });
+    // Route::middleware('permission:module dashboard')->group(function () {
+        
+    //     // Dashboard route
+    //     Route::get('/dashboard', [DashboardRouterController::class, 'index'])
+    //     ->middleware('mfa')
+    //     ->name('dashboard');
+
+    // });
     
     // Locations management routes
     Route::middleware('permission:module locations')->group(function () {
@@ -177,7 +194,23 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('/maintenance/{maintenanceRequest}', [MaintenanceRequestController::class, 'destroy'])->name('maintenance.destroy');
     });
 
-    
+    // Broadcast:
+    Route::middleware('permission:module broadcasts')->group(function () {
+        Route::get('/broadcasts', [BroadcastController::class, 'index'])->name('broadcasts.index');
+        Route::get('/broadcasts/create', [BroadcastController::class, 'create'])->name('broadcasts.create');
+        Route::post('/broadcasts/preview', [BroadcastController::class, 'preview'])->name('broadcasts.preview');
+        Route::post('/broadcasts', [BroadcastController::class, 'store'])->name('broadcasts.store');
+        Route::get('/broadcasts/{broadcast}', [BroadcastController::class, 'show'])->name('broadcasts.show');
+        Route::post('/broadcasts/contact-lists/upload', [BroadcastController::class, 'uploadContactList'])->name('broadcasts.contact-lists.upload');
+    });
+
+    // Reports:
+    Route::middleware('auth')->prefix('reports')->name('reports.')->group(function () {
+        Route::get('/financial', [ReportController::class, 'financial'])->name('financial-report');
+        Route::get('/occupancy', [ReportController::class, 'occupancy'])->name('occupancy-report');
+        Route::get('/tenant', [ReportController::class, 'tenant'])->name('tenant-report');
+        Route::get('/maintenance', [ReportController::class, 'maintenance'])->name('maintenance-report');
+    });
 
     // Roles and permissions management routes
     Route::middleware('permission:module roles')->group(function () {

@@ -68,7 +68,7 @@
         "react-dom": "^19.0.0",
         "react-phone-input-2": "^2.15.1",
         "react-simple-keyboard": "^3.8.141",
-        "recharts": "^3.6.0",
+        "recharts": "^3.9.0",
         "sweetalert2": "^11.26.18",
         "tailwind-merge": "^3.0.1",
         "tailwindcss": "^4.0.0",

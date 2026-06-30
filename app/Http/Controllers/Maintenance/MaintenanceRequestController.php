@@ -15,11 +15,27 @@ use Inertia\Inertia;
 
 class MaintenanceRequestController extends Controller
 {
+    /**
+     * Safely resolve the company ID from the service container or fallback options.
+     */
+    private function resolveCompanyId(): int
+    {
+        if (app()->has('currentCompany')) {
+            $resolved = app('currentCompany');
+            return is_numeric($resolved) ? (int)$resolved : ($resolved->id ?? 1);
+        }
+        
+        return auth()->user()->company_id ?? 1;
+    }
+
     public function index(Request $request)
     {
         Gate::authorize('viewAny', MaintenanceRequest::class);
 
+        $companyId = $this->resolveCompanyId();
+
         $query = MaintenanceRequest::query()
+            ->where('company_id', $companyId)
             ->with(['tenant:id,name', 'unit:id,unit_no', 'assignee:id,name']);
 
         if ($search = $request->string('search')->toString()) {
@@ -73,11 +89,20 @@ class MaintenanceRequestController extends Controller
     {
         Gate::authorize('view', $maintenanceRequest);
 
+        $companyId = $this->resolveCompanyId();
+
+        if ($maintenanceRequest->company_id !== $companyId) {
+            abort(403, 'Unauthorized action.');
+        }
+
         $maintenanceRequest->load(['tenant:id,name,email', 'unit:id,unit_no', 'assignee:id,name', 'photos']);
 
         return Inertia::render('maintenance/show', [
             'request' => $maintenanceRequest,
-            'caretakers' => User::role('caretaker')->orderBy('name')->get(['id', 'name']),
+            'caretakers' => User::role('caretaker')
+                ->whereHas('companies', fn($q) => $q->where('company_id', $companyId))
+                ->orderBy('name')
+                ->get(['id', 'name']),
             'statusOptions' => MaintenanceRequest::STATUSES,
         ]);
     }
@@ -86,9 +111,17 @@ class MaintenanceRequestController extends Controller
     {
         Gate::authorize('create', MaintenanceRequest::class);
 
+        $companyId = $this->resolveCompanyId();
+
         return Inertia::render('maintenance/create', [
-            'tenants' => User::role('tenant')->orderBy('name')->get(['id', 'name', 'email']),
-            'caretakers' => User::role('caretaker')->orderBy('name')->get(['id', 'name']),
+            'tenants' => User::role('tenant')
+                ->whereHas('companies', fn($q) => $q->where('company_id', $companyId))
+                ->orderBy('name')
+                ->get(['id', 'name', 'email']),
+            'caretakers' => User::role('caretaker')
+                ->whereHas('companies', fn($q) => $q->where('company_id', $companyId))
+                ->orderBy('name')
+                ->get(['id', 'name']),
             'categoryOptions' => MaintenanceRequest::CATEGORIES,
             'priorityOptions' => MaintenanceRequest::PRIORITIES,
         ]);
@@ -98,7 +131,7 @@ class MaintenanceRequestController extends Controller
     {
         Gate::authorize('create', MaintenanceRequest::class);
 
-        $companyId = app('currentCompany')->id;
+        $companyId = $this->resolveCompanyId();
 
         $validated = $request->validate([
             'tenant_id' => ['required', Rule::exists('company_user', 'user_id')->where('company_id', $companyId)],
@@ -130,6 +163,7 @@ class MaintenanceRequestController extends Controller
             'unit_id' => $activeLease?->unit_id,
             'category' => $validated['category'],
             'priority' => $validated['priority'],
+            'description' => $validated['description'],
             'assignee_id' => $validated['assignee_id'] ?? null,
             'raised_at' => now(),
             'status' => $validated['assignee_id'] ? 'assigned' : 'open',
@@ -147,7 +181,11 @@ class MaintenanceRequestController extends Controller
     {
         Gate::authorize('update', $maintenanceRequest);
 
-        $companyId = app('currentCompany')->id;
+        $companyId = $this->resolveCompanyId();
+
+        if ($maintenanceRequest->company_id !== $companyId) {
+            abort(403, 'Unauthorized action.');
+        }
 
         $validated = $request->validate([
             'status' => ['required', Rule::in(MaintenanceRequest::STATUSES)],
@@ -172,6 +210,12 @@ class MaintenanceRequestController extends Controller
     public function destroy(MaintenanceRequest $maintenanceRequest)
     {
         Gate::authorize('delete', $maintenanceRequest);
+
+        $companyId = $this->resolveCompanyId();
+
+        if ($maintenanceRequest->company_id !== $companyId) {
+            abort(403, 'Unauthorized action.');
+        }
 
         foreach ($maintenanceRequest->photos as $photo) {
             Storage::disk('public')->delete($photo->path);

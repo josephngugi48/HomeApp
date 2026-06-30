@@ -12,11 +12,27 @@ use Inertia\Inertia;
 
 class NoticeController extends Controller
 {
+    /**
+     * Safely resolve the company ID from the service container or fallback options.
+     */
+    private function resolveCompanyId(): int
+    {
+        if (app()->has('currentCompany')) {
+            $resolved = app('currentCompany');
+            return is_numeric($resolved) ? (int)$resolved : ($resolved->id ?? 1);
+        }
+        
+        return auth()->user()->company_id ?? 1;
+    }
+
     public function index(Request $request)
     {
         Gate::authorize('viewAny', Notice::class);
 
+        $companyId = $this->resolveCompanyId();
+
         $query = Notice::query()
+            ->where('company_id', $companyId)
             ->with(['tenant:id,name', 'unit:id,unit_no', 'lease:id,status']);
 
         if ($search = $request->string('search')->toString()) {
@@ -48,7 +64,10 @@ class NoticeController extends Controller
         // replacement for auto-termination. Staff see this every time
         // they load the page; nothing fires without them clicking
         // through to LeaseController::terminate().
-        $actionNeededCount = Notice::query()->actionNeeded()->count();
+        $actionNeededCount = Notice::query()
+            ->where('company_id', $companyId)
+            ->actionNeeded()
+            ->count();
 
         return Inertia::render('notices/index', [
             'notices' => $notices,
@@ -64,8 +83,11 @@ class NoticeController extends Controller
     {
         Gate::authorize('create', Notice::class);
 
+        $companyId = $this->resolveCompanyId();
+
         return Inertia::render('notices/create', [
             'leases' => Lease::query()
+                ->where('company_id', $companyId)
                 ->where('status', 'active')
                 ->with(['tenant:id,name', 'unit:id,unit_no'])
                 ->get(['id', 'tenant_id', 'unit_id']),
@@ -77,7 +99,7 @@ class NoticeController extends Controller
     {
         Gate::authorize('create', Notice::class);
 
-        $companyId = app('currentCompany')->id;
+        $companyId = $this->resolveCompanyId();
 
         $validated = $request->validate([
             'lease_id' => ['required', Rule::exists('leases', 'id')->where('company_id', $companyId)],
@@ -105,6 +127,12 @@ class NoticeController extends Controller
     {
         Gate::authorize('update', $notice);
 
+        $companyId = $this->resolveCompanyId();
+
+        if ($notice->company_id !== $companyId) {
+            abort(403, 'Unauthorized action.');
+        }
+
         $validated = $request->validate([
             'status' => ['required', Rule::in(Notice::STATUSES)],
         ]);
@@ -125,6 +153,12 @@ class NoticeController extends Controller
     {
         Gate::authorize('update', $notice);
 
+        $companyId = $this->resolveCompanyId();
+
+        if ($notice->company_id !== $companyId) {
+            abort(403, 'Unauthorized action.');
+        }
+
         if (! $notice->needsAction()) {
             return back()->with('error', 'This notice does not require lease termination action.');
         }
@@ -140,7 +174,15 @@ class NoticeController extends Controller
     public function destroy(Notice $notice)
     {
         Gate::authorize('delete', $notice);
+
+        $companyId = $this->resolveCompanyId();
+
+        if ($notice->company_id !== $companyId) {
+            abort(403, 'Unauthorized action.');
+        }
+
         $notice->delete();
+        
         return redirect()->route('notices.index')->with('success', 'Notice deleted.');
     }
 }

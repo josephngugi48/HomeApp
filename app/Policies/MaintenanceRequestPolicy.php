@@ -7,7 +7,7 @@ use App\Models\MaintenanceRequest;
 
 class MaintenanceRequestPolicy
 {
-    public function view(User $user, MaintenanceRequest $maintenanceRequest): bool
+    public function view(User $user, MaintenanceRequest $maintenance): bool
     {
         return $user->can('module maintenance');
     }
@@ -22,12 +22,12 @@ class MaintenanceRequestPolicy
         return $user->can('module maintenance') && $user->can('create maintenance');
     }
 
-    public function update(User $user, User $tenant): bool
+    public function update(User $user, MaintenanceRequest $maintenance): bool
     {
         return $user->can('module maintenance') && $user->can('edit maintenance');
     }
 
-    public function delete(User $user, User $tenant): bool
+    public function delete(User $user, MaintenanceRequest $maintenance): bool
     {
         return $user->can('module maintenance') && $user->can('delete maintenance');
     }
