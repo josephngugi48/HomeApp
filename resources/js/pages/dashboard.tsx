@@ -6,7 +6,6 @@ import {
     Users, ShieldCheck, Building2, DoorOpen, Wallet, TrendingUp,
     AlertTriangle, Wrench, FileWarning, ArrowRight, MapPin,
 } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Dashboard', href: '/dashboard' }];
@@ -15,9 +14,9 @@ const formatKES = (n: number) =>
     new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES', maximumFractionDigits: 0 }).format(n);
 
 interface Props {
-    kpis: DashboardKpis;
-    needsAttention: NeedsAttention;
-    can: { viewFinancial: boolean; viewOccupancy: boolean; viewMaintenance: boolean };
+    kpis?: DashboardKpis;
+    needsAttention?: NeedsAttention;
+    can?: { viewFinancial: boolean; viewOccupancy: boolean; viewMaintenance: boolean };
 }
 
 const severityStyle: Record<string, string> = {
@@ -31,8 +30,27 @@ const typeIcon: Record<string, any> = {
     maintenance: Wrench,
 };
 
+// Safe fallback shape — if the backend ever fails to pass these props
+// (stale route, controller error swallowed by Inertia, etc.) the page
+// renders an empty-but-functional dashboard instead of crashing the
+// entire app. A dashboard is the worst page in the system to hard-fail.
+const EMPTY_KPIS: DashboardKpis = {
+    totalLocations: 0, totalApartments: 0, totalUnits: 0, occupiedUnits: 0,
+    vacantUnits: 0, occupancyPct: 0, activeTenants: 0, monthlyBilling: 0,
+    collectedThisMonth: 0, outstandingDebt: 0, walletBalance: 0,
+    openMaintenance: 0, inProgressMaintenance: 0, resolvedMaintenance: 0,
+};
+
+const EMPTY_ATTENTION: NeedsAttention = {
+    items: [], totalOverdueInvoices: 0, totalPendingNotices: 0, totalUrgentMaintenance: 0,
+};
+
 export default function Dashboard({ kpis, needsAttention, can }: Props) {
     const { auth, site: settings } = usePage<SharedData>().props;
+
+    const safeKpis = kpis ?? EMPTY_KPIS;
+    const safeAttention = needsAttention ?? EMPTY_ATTENTION;
+    const safeCan = can ?? { viewFinancial: false, viewOccupancy: false, viewMaintenance: false };
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -50,7 +68,14 @@ export default function Dashboard({ kpis, needsAttention, can }: Props) {
                     </div>
                 </div>
 
-                {needsAttention.items.length > 0 && (
+                {!kpis && (
+                    <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-300">
+                        Dashboard data didn't load correctly. Try refreshing — if this persists, check that the
+                        dashboard route is pointing at the current DashboardController.
+                    </div>
+                )}
+
+                {safeAttention.items.length > 0 && (
                     <div>
                         <div className="flex items-center justify-between mb-3">
                             <h2 className="text-lg font-semibold flex items-center gap-2">
@@ -58,19 +83,19 @@ export default function Dashboard({ kpis, needsAttention, can }: Props) {
                                 Needs Attention
                             </h2>
                             <div className="flex gap-2 text-xs text-muted-foreground">
-                                {needsAttention.totalOverdueInvoices > 0 && (
-                                    <Badge variant="destructive">{needsAttention.totalOverdueInvoices} overdue</Badge>
+                                {safeAttention.totalOverdueInvoices > 0 && (
+                                    <Badge variant="destructive">{safeAttention.totalOverdueInvoices} overdue</Badge>
                                 )}
-                                {needsAttention.totalPendingNotices > 0 && (
-                                    <Badge variant="secondary">{needsAttention.totalPendingNotices} notices</Badge>
+                                {safeAttention.totalPendingNotices > 0 && (
+                                    <Badge variant="secondary">{safeAttention.totalPendingNotices} notices</Badge>
                                 )}
-                                {needsAttention.totalUrgentMaintenance > 0 && (
-                                    <Badge variant="secondary">{needsAttention.totalUrgentMaintenance} maintenance</Badge>
+                                {safeAttention.totalUrgentMaintenance > 0 && (
+                                    <Badge variant="secondary">{safeAttention.totalUrgentMaintenance} maintenance</Badge>
                                 )}
                             </div>
                         </div>
                         <div className="grid gap-2">
-                            {needsAttention.items.map((item, i) => {
+                            {safeAttention.items.map((item, i) => {
                                 const Icon = typeIcon[item.type]
                                 return (
                                     <Link
@@ -94,43 +119,43 @@ export default function Dashboard({ kpis, needsAttention, can }: Props) {
                 <div>
                     <h2 className="text-lg font-semibold text-foreground mb-4">Properties &amp; Occupancy</h2>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <KpiTile icon={MapPin} label="Locations" value={kpis.totalLocations} sub={`${kpis.totalApartments} apartments`} />
-                        <KpiTile icon={DoorOpen} label="Total Units" value={kpis.totalUnits} sub={`${kpis.vacantUnits} vacant`} />
-                        <KpiTile icon={Building2} label="Occupancy" value={`${kpis.occupancyPct}%`} sub={`${kpis.occupiedUnits}/${kpis.totalUnits} occupied`} tone="success" />
-                        <KpiTile icon={Users} label="Active Tenants" value={kpis.activeTenants} />
+                        <KpiTile icon={MapPin} label="Locations" value={safeKpis.totalLocations} sub={`${safeKpis.totalApartments} apartments`} />
+                        <KpiTile icon={DoorOpen} label="Total Units" value={safeKpis.totalUnits} sub={`${safeKpis.vacantUnits} vacant`} />
+                        <KpiTile icon={Building2} label="Occupancy" value={`${safeKpis.occupancyPct}%`} sub={`${safeKpis.occupiedUnits}/${safeKpis.totalUnits} occupied`} tone="success" />
+                        <KpiTile icon={Users} label="Active Tenants" value={safeKpis.activeTenants} />
                     </div>
                 </div>
 
                 <div>
                     <div className="flex items-center justify-between mb-4">
                         <h2 className="text-lg font-semibold text-foreground">Finance — This Month</h2>
-                        {can.viewFinancial && (
+                        {safeCan.viewFinancial && (
                             <Link href="/reports/financial" className="text-sm text-primary hover:underline flex items-center gap-1">
                                 Full report <ArrowRight className="h-3 w-3" />
                             </Link>
                         )}
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <KpiTile icon={TrendingUp} label="Billed" value={formatKES(kpis.monthlyBilling)} />
-                        <KpiTile icon={Wallet} label="Collected" value={formatKES(kpis.collectedThisMonth)} tone="success" />
-                        <KpiTile icon={AlertTriangle} label="Outstanding Debt" value={formatKES(kpis.outstandingDebt)} tone="destructive" />
-                        <KpiTile icon={Wallet} label="Wallet Balances" value={formatKES(kpis.walletBalance)} tone="accent" />
+                        <KpiTile icon={TrendingUp} label="Billed" value={formatKES(safeKpis.monthlyBilling)} />
+                        <KpiTile icon={Wallet} label="Collected" value={formatKES(safeKpis.collectedThisMonth)} tone="success" />
+                        <KpiTile icon={AlertTriangle} label="Outstanding Debt" value={formatKES(safeKpis.outstandingDebt)} tone="destructive" />
+                        <KpiTile icon={Wallet} label="Wallet Balances" value={formatKES(safeKpis.walletBalance)} tone="accent" />
                     </div>
                 </div>
 
                 <div>
                     <div className="flex items-center justify-between mb-4">
                         <h2 className="text-lg font-semibold text-foreground">Maintenance</h2>
-                        {can.viewMaintenance && (
+                        {safeCan.viewMaintenance && (
                             <Link href="/maintenance" className="text-sm text-primary hover:underline flex items-center gap-1">
                                 View all <ArrowRight className="h-3 w-3" />
                             </Link>
                         )}
                     </div>
                     <div className="grid grid-cols-3 gap-4">
-                        <KpiTile icon={Wrench} label="Open" value={kpis.openMaintenance} tone="warning" />
-                        <KpiTile icon={Wrench} label="In Progress" value={kpis.inProgressMaintenance} />
-                        <KpiTile icon={ShieldCheck} label="Resolved" value={kpis.resolvedMaintenance} tone="success" />
+                        <KpiTile icon={Wrench} label="Open" value={safeKpis.openMaintenance} tone="warning" />
+                        <KpiTile icon={Wrench} label="In Progress" value={safeKpis.inProgressMaintenance} />
+                        <KpiTile icon={ShieldCheck} label="Resolved" value={safeKpis.resolvedMaintenance} tone="success" />
                     </div>
                 </div>
             </div>
