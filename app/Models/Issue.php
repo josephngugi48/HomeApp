@@ -5,10 +5,15 @@ namespace App\Models;
 use App\Traits\BelongsToCompany;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 class Issue extends Model
 {
-    use SoftDeletes, BelongsToCompany;
+    use SoftDeletes, BelongsToCompany, LogsActivity;
+
+    public const CATEGORIES = ['general', 'security', 'utility', 'property'];
+    public const STATUSES = ['open', 'assigned', 'in_progress', 'closed'];
 
     protected $fillable = [
         'company_id', 'lease_id', 'tenant_id', 'unit_id',
@@ -18,6 +23,11 @@ class Issue extends Model
     protected $casts = [
         'raised_at' => 'datetime',
     ];
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()->logFillable()->logOnlyDirty()->dontSubmitEmptyLogs();
+    }
 
     public function lease()
     {

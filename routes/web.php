@@ -11,6 +11,9 @@ use App\Http\Controllers\Invoices\InvoiceController;
 use App\Http\Controllers\Payments\PaymentController;
 use App\Http\Controllers\Payments\MpesaController;
 use App\Http\Controllers\Wallet\WalletController;
+use App\Http\Controllers\Issues\IssueController;
+use App\Http\Controllers\Notices\NoticeController;
+use App\Http\Controllers\Maintenance\MaintenanceRequestController;
 use App\Http\Controllers\RolesAndPermissions\RolesAndPermissionsController;
 use App\Http\Controllers\Settings\SystemSettingsController;
 use App\Http\Controllers\Users\UsersController;
@@ -61,7 +64,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Dashboard routes
     Route::middleware('permission:module dashboard')->group(function () {
-
+        
+        // Dashboard route
         Route::get('/dashboard', [DashboardController::class, 'index'])
             ->middleware('mfa')
             ->name('dashboard');
@@ -128,7 +132,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('/invoices/{invoice}', [InvoiceController::class, 'destroy'])->name('invoices.destroy');
     });
 
-    // Payments
+    // Payments 
     Route::middleware('permission:module payments')->group(function () {
         Route::get('/payments', [PaymentController::class, 'index'])->name('payments.index');
         Route::get('/payments/create', [PaymentController::class, 'create'])->name('payments.create');
@@ -143,6 +147,37 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/wallet/{wallet}/deposit', [WalletController::class, 'deposit'])->name('wallet.deposit');
         Route::post('/wallet/{wallet}/apply', [WalletController::class, 'applyToInvoice'])->name('wallet.apply');
     });
+
+    // Issues
+    Route::middleware('permission:module issues')->group(function () {
+        Route::get('/issues', [IssueController::class, 'index'])->name('issues.index');
+        Route::get('/issues/create', [IssueController::class, 'create'])->name('issues.create');
+        Route::post('/issues', [IssueController::class, 'store'])->name('issues.store');
+        Route::put('/issues/{issue}', [IssueController::class, 'update'])->name('issues.update');
+        Route::delete('/issues/{issue}', [IssueController::class, 'destroy'])->name('issues.destroy');
+    });
+
+    // Notices
+    Route::middleware('permission:module notices')->group(function () {
+        Route::get('/notices', [NoticeController::class, 'index'])->name('notices.index');
+        Route::get('/notices/create', [NoticeController::class, 'create'])->name('notices.create');
+        Route::post('/notices', [NoticeController::class, 'store'])->name('notices.store');
+        Route::put('/notices/{notice}', [NoticeController::class, 'update'])->name('notices.update');
+        Route::post('/notices/{notice}/act', [NoticeController::class, 'actOn'])->name('notices.act');
+        Route::delete('/notices/{notice}', [NoticeController::class, 'destroy'])->name('notices.destroy');
+    });
+
+    // Maintenance
+    Route::middleware('permission:module maintenance')->group(function () {
+        Route::get('/maintenance', [MaintenanceRequestController::class, 'index'])->name('maintenance.index');
+        Route::get('/maintenance/create', [MaintenanceRequestController::class, 'create'])->name('maintenance.create');
+        Route::post('/maintenance', [MaintenanceRequestController::class, 'store'])->name('maintenance.store');
+        Route::get('/maintenance/{maintenanceRequest}', [MaintenanceRequestController::class, 'show'])->name('maintenance.show');
+        Route::put('/maintenance/{maintenanceRequest}', [MaintenanceRequestController::class, 'update'])->name('maintenance.update');
+        Route::delete('/maintenance/{maintenanceRequest}', [MaintenanceRequestController::class, 'destroy'])->name('maintenance.destroy');
+    });
+
+    
 
     // Roles and permissions management routes
     Route::middleware('permission:module roles')->group(function () {

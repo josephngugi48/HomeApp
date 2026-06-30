@@ -7,17 +7,31 @@ use App\Models\Invoice;
 use App\Models\User;
 use App\Models\Wallet;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
 class WalletController extends Controller
 {
+    /**
+     * Safely resolve the company ID from the service container or fallback options.
+     */
+    private function resolveCompanyId(): int
+    {
+        if (app()->has('currentCompany')) {
+            $resolved = app('currentCompany');
+            return is_numeric($resolved) ? (int)$resolved : ($resolved->id ?? 1);
+        }
+        
+        return auth()->user()->company_id ?? 1;
+    }
+
     public function index(Request $request)
     {
         Gate::authorize('viewAny', Wallet::class);
 
-        $companyId = app('currentCompany')->id;
+        $companyId = $this->resolveCompanyId();
 
         $perPage = $request->integer('per_page', 10);
         $search = $request->string('search')->toString();
@@ -49,6 +63,13 @@ class WalletController extends Controller
     public function show(Wallet $wallet)
     {
         Gate::authorize('view', $wallet);
+
+        $companyId = $this->resolveCompanyId();
+
+        // Ensure the wallet requested belongs to the active tenant/company context
+        if ($wallet->company_id !== $companyId) {
+            abort(403, 'Unauthorized action.');
+        }
 
         $wallet->load('tenant:id,name,email');
 
@@ -84,6 +105,12 @@ class WalletController extends Controller
     {
         Gate::authorize('deposit', Wallet::class);
 
+        $companyId = $this->resolveCompanyId();
+
+        if ($wallet->company_id !== $companyId) {
+            abort(403, 'Unauthorized action.');
+        }
+
         $validated = $request->validate([
             'amount' => 'required|numeric|min:0.01',
             'note' => 'nullable|string|max:255',
@@ -109,6 +136,12 @@ class WalletController extends Controller
     {
         Gate::authorize('applyToInvoice', Wallet::class);
 
+        $companyId = $this->resolveCompanyId();
+
+        if ($wallet->company_id !== $companyId) {
+            abort(403, 'Unauthorized action.');
+        }
+
         $validated = $request->validate([
             'invoice_id' => [
                 'required',
@@ -119,7 +152,7 @@ class WalletController extends Controller
             'amount' => 'required|numeric|min:0.01',
         ]);
 
-        \Illuminate\Support\Facades\DB::transaction(function () use ($validated, $wallet, &$applyAmount, &$invoice) {
+        DB::transaction(function () use ($validated, $wallet, &$applyAmount, &$invoice) {
             $invoice = Invoice::query()->lockForUpdate()->findOrFail($validated['invoice_id']);
             $wallet->lockForUpdate()->refresh();
 

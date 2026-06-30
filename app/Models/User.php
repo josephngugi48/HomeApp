@@ -92,4 +92,13 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         return $this->hasOne(TenantProfile::class);
     }
+
+    /**
+     * Get the leases associated with the user (tenant).
+     */
+    public function leases(): HasMany
+    {
+        return $this->hasMany(Lease::class, 'tenant_id');
+    }
+    
 }

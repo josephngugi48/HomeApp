@@ -297,3 +297,87 @@ export interface WalletTransactionRecord {
     occurred_at: string;
     meta: Record<string, any> | null;
 }
+
+export interface CompanyUserOption {
+    id: number;
+    name: string;
+    email?: string;
+}
+
+export interface IssueRecord {
+    id: number;
+    title: string;
+    body: string;
+    category: "general" | "security" | "utility" | "property";
+    status: "open" | "assigned" | "in_progress" | "closed";
+    raised_at: string;
+    tenant?: { id: number; name: string };
+    unit?: { id: number; unit_no: string } | null;
+    assignee?: { id: number; name: string } | null;
+    can?: { update?: boolean; delete?: boolean };
+}
+
+export interface NoticeRecord {
+    id: number;
+    type: "vacating" | "lease_renewal" | "lease_termination";
+    status: "open" | "acknowledged" | "closed";
+    submitted_at: string;
+    effective_at: string;
+    needs_action?: boolean;
+    tenant?: { id: number; name: string };
+    unit?: { id: number; unit_no: string } | null;
+    lease?: { id: number; status: string } | null;
+    can?: { update?: boolean; delete?: boolean };
+}
+
+export interface MaintenancePhotoRecord {
+    id: number;
+    path: string;
+    kind: "before" | "after";
+}
+
+export interface MaintenanceRequestRecord {
+    id: number;
+    number: string;
+    category: string;
+    priority: "low" | "medium" | "high" | "emergency";
+    status: "open" | "assigned" | "in_progress" | "completed" | "closed";
+    raised_at: string;
+    tenant?: { id: number; name: string };
+    unit?: { id: number; unit_no: string } | null;
+    assignee?: { id: number; name: string } | null;
+    photos?: MaintenancePhotoRecord[];
+    can?: { update?: boolean; delete?: boolean };
+}
+
+export interface DashboardKpis {
+    totalLocations: number;
+    totalApartments: number;
+    totalUnits: number;
+    occupiedUnits: number;
+    vacantUnits: number;
+    occupancyPct: number;
+    activeTenants: number;
+    monthlyBilling: number;
+    collectedThisMonth: number;
+    outstandingDebt: number;
+    walletBalance: number;
+    openMaintenance: number;
+    inProgressMaintenance: number;
+    resolvedMaintenance: number;
+}
+
+export interface NeedsAttentionItem {
+    type: "overdue_invoice" | "vacating_notice" | "maintenance";
+    title: string;
+    subtitle: string;
+    href: string;
+    severity: "high" | "medium";
+}
+
+export interface NeedsAttention {
+    items: NeedsAttentionItem[];
+    totalOverdueInvoices: number;
+    totalPendingNotices: number;
+    totalUrgentMaintenance: number;
+}

@@ -8,6 +8,8 @@ use App\Models\Invoice;
 use App\Models\InvoiceItem;
 use App\Models\Lease;
 use App\Models\Payment;
+use App\Models\Wallet;
+use App\Models\WalletTransaction;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -91,31 +93,27 @@ class InvoiceController extends Controller
     {
         Gate::authorize('create', Invoice::class);
 
+        $companyId = $this->resolveCompanyId();
+
         return Inertia::render('invoices/create', [
             'leases' => Lease::query()
+                ->where('company_id', $companyId)
                 ->where('status', 'active')
                 ->with(['tenant:id,name,email', 'unit:id,unit_no,apartment_id', 'unit.apartment:id,name'])
                 ->get(['id', 'tenant_id', 'unit_id', 'rent', 'service_charge']),
             'itemTypes' => InvoiceItem::TYPES,
-            'walletBalances' => \App\Models\Wallet::query()
-                ->where('company_id', app('currentCompany')->id)
+            'walletBalances' => Wallet::query()
+                ->where('company_id', $companyId)
                 ->where('balance', '>', 0)
                 ->pluck('balance', 'tenant_id'),
         ]);
     }
 
-    
     public function store(Request $request)
     {
         Gate::authorize('create', Invoice::class);
 
-        // 🛡️ Safely fetch the current company ID from container or fallback to authenticated context
-        if (app()->has('currentCompany')) {
-            $resolved = app('currentCompany');
-            $companyId = is_numeric($resolved) ? (int)$resolved : ($resolved->id ?? 1);
-        } else {
-            $companyId = auth()->user()->company_id ?? 1;
-        }
+        $companyId = $this->resolveCompanyId();
 
         $validated = $request->validate([
             'lease_id' => [
@@ -252,7 +250,7 @@ class InvoiceController extends Controller
             'lease:id,start_date,end_date',
         ]);
         
-        $walletCreditApplied = \App\Models\WalletTransaction::query()
+        $walletCreditApplied = WalletTransaction::query()
             ->whereJsonContains('meta->invoice_id', $invoice->id)
             ->where('type', 'payment')
             ->sum('amount');
@@ -261,10 +259,6 @@ class InvoiceController extends Controller
             'invoice' => $invoice,
             'walletCreditApplied' => abs((float) $walletCreditApplied),
         ]);
-
-        // return Inertia::render('invoices/show', [
-        //     'invoice' => $invoice,
-        // ]);
     }
 
     public function destroy(Invoice $invoice)

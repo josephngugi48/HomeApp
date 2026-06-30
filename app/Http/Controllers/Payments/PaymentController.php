@@ -14,6 +14,19 @@ use Inertia\Inertia;
 
 class PaymentController extends Controller
 {
+    /**
+     * Safely resolve the company ID from the service container or fallback options.
+     */
+    private function resolveCompanyId(): int
+    {
+        if (app()->has('currentCompany')) {
+            $resolved = app('currentCompany');
+            return is_numeric($resolved) ? (int)$resolved : ($resolved->id ?? 1);
+        }
+        
+        return auth()->user()->company_id ?? 1;
+    }
+
     public function index(Request $request)
     {
         Gate::authorize('viewAny', Payment::class);
@@ -24,7 +37,10 @@ class PaymentController extends Controller
         $sortBy = $request->string('sort_by')->toString();
         $sortDirection = $request->string('sort_direction', 'asc')->toString();
 
+        $companyId = $this->resolveCompanyId();
+
         $query = Payment::query()
+            ->where('company_id', $companyId)
             ->with(['tenant:id,name,email', 'invoice:id,number']);
 
         if ($search) {
@@ -74,7 +90,7 @@ class PaymentController extends Controller
     {
         Gate::authorize('create', Payment::class);
 
-        $companyId = app('currentCompany')->id;
+        $companyId = $this->resolveCompanyId();
 
         return Inertia::render('payments/create', [
             // Only invoices with an outstanding balance are realistic
@@ -95,7 +111,7 @@ class PaymentController extends Controller
     {
         Gate::authorize('create', Payment::class);
 
-        $companyId = app('currentCompany')->id;
+        $companyId = $this->resolveCompanyId();
 
         $validated = $request->validate([
             'invoice_id' => [
@@ -150,12 +166,17 @@ class PaymentController extends Controller
     {
         Gate::authorize('reverse', $payment);
 
+        $companyId = $this->resolveCompanyId();
+
         if ($payment->isReversed()) {
             return back()->with('error', 'This payment has already been reversed.');
         }
 
-        DB::transaction(function () use ($payment) {
-            $invoice = Invoice::query()->lockForUpdate()->findOrFail($payment->invoice_id);
+        DB::transaction(function () use ($payment, $companyId) {
+            $invoice = Invoice::query()
+                ->where('company_id', $companyId)
+                ->lockForUpdate()
+                ->findOrFail($payment->invoice_id);
 
             $payment->update([
                 'reversed_at' => now(),

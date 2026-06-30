@@ -126,6 +126,7 @@ class TenantController extends Controller
             $user = User::create([
                 'name' => $validated['name'],
                 'email' => $validated['email'],
+                'phone' => $validated['phone'] ?? null,
                 'password' => $validated['password'], // hashed via cast on User model
             ]);
 
@@ -201,6 +202,7 @@ class TenantController extends Controller
             $tenant->update([
                 'name' => $validated['name'],
                 'email' => $validated['email'],
+                'phone' => $validated['phone'] ?? null,
             ]);
 
             if (!empty($validated['password'])) {
