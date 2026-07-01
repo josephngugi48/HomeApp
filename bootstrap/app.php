@@ -30,6 +30,15 @@ return Application::configure(basePath: dirname(__DIR__))
             'permission' => PermissionMiddleware::class,
             'role_or_permission' => RoleOrPermissionMiddleware::class,
             'mfa' => EnsureMFAEnabled::class,
+            'tenant.portal' => \App\Http\Middleware\EnsureTenantPortalAccess::class,
+            'resolve.company' => \App\Http\Middleware\ResolveCurrentCompany::class,
+        ]);
+
+        // CSRF exclusions: (Safaricom, AfricaStalking, Meta)
+        $middleware->validateCsrfTokens(except: [
+            'mpesa/callback',
+            'webhooks/sms/delivery',
+            'webhooks/whatsapp',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

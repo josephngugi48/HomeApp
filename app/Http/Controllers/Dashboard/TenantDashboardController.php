@@ -1,81 +1,101 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers\Dashboard;
 
 use App\Http\Controllers\Controller;
 use App\Models\Invoice;
+use App\Models\Issue;
+use App\Models\MaintenanceRequest;
 use App\Models\Wallet;
-use App\Models\Lease;
 use Inertia\Inertia;
+use Inertia\Response;
 
-class TenantDashboardController extends Controller
+final class TenantDashboardController extends Controller
 {
-    public function index()
+    /**
+     * Safely resolve the company ID from the service container or fallback options.
+     */
+    private function resolveCompanyId(): int
     {
-        $user = auth()->user();
-        $tenantId = $user->id;
+        if (app()->has('currentCompany')) {
+            $resolved = app('currentCompany');
+            return is_numeric($resolved) ? (int)$resolved : ($resolved->id ?? 1);
+        }
+        
+        return auth()->user()->company_id ?? 1;
+    }
 
-        // Total outstanding balance
-        $totalBalance = Invoice::where('tenant_id', $tenantId)
+    public function index(): Response
+    {
+        $user      = auth()->user();
+        $companyId = $this->resolveCompanyId();
+        $lease     = app('tenantLease');
+
+        $wallet = Wallet::forTenant($companyId, $user->id);
+
+        $overdueCount = Invoice::query()
+            ->where('company_id', $companyId)
+            ->where('tenant_id', $user->id)
+            ->where('status', 'overdue')
+            ->count();
+
+        $unpaidCount = Invoice::query()
+            ->where('company_id', $companyId)
+            ->where('tenant_id', $user->id)
+            ->whereIn('status', ['unpaid', 'partial', 'overdue'])
+            ->count();
+
+        $totalOutstanding = (float) Invoice::query()
+            ->where('company_id', $companyId)
+            ->where('tenant_id', $user->id)
             ->where('balance', '>', 0)
             ->sum('balance');
 
-        // Next due date of any unpaid invoice
-        $nextDue = Invoice::where('tenant_id', $tenantId)
-            ->where('balance', '>', 0)
-            ->min('due_date');
+        $openIssues = Issue::query()
+            ->where('company_id', $companyId)
+            ->where('tenant_id', $user->id)
+            ->whereNotIn('status', ['closed'])
+            ->count();
 
-        // Current invoice: the one with the earliest due date among unpaid
-        $currentInvoice = Invoice::where('tenant_id', $tenantId)
-            ->where('balance', '>', 0)
-            ->orderBy('due_date')
-            ->first();
-        $currentInvoiceAmount = $currentInvoice ? $currentInvoice->balance : 0;
+        $openMaintenance = MaintenanceRequest::query()
+            ->where('company_id', $companyId)
+            ->where('tenant_id', $user->id)
+            ->whereNotIn('status', ['completed', 'closed'])
+            ->count();
 
-        // Outstanding (same as total balance for consistency)
-        $outstanding = $totalBalance;
+        $latestInvoices = Invoice::query()
+            ->where('company_id', $companyId)
+            ->where('tenant_id', $user->id)
+            ->orderByDesc('issue_date')
+            ->limit(3)
+            ->get(['id', 'number', 'issue_date', 'due_date', 'total', 'balance', 'status']);
 
-        // Wallet balance
-        $walletBalance = Wallet::where('tenant_id', $tenantId)->sum('balance');
-
-        // Active lease unit/apartment/location
-        $activeLease = Lease::where('tenant_id', $tenantId)
-            ->where('status', 'active')
-            ->with('unit.apartment.location')
-            ->first();
-        $accountName = '';
-        if ($activeLease) {
-            $unit = $activeLease->unit;
-            $apartment = $unit->apartment;
-            $location = $apartment->location;
-            $accountName = $apartment->name . ' — ' . $location->name;
-        }
-
-        // Recent 4 invoices
-        $recentInvoices = Invoice::where('tenant_id', $tenantId)
-            ->orderBy('issue_date', 'desc')
-            ->limit(4)
-            ->get(['id', 'issue_date', 'total', 'balance'])
-            ->map(function ($invoice) {
-                return [
-                    'id' => $invoice->id,
-                    'date' => $invoice->issue_date->format('F j, Y'),
-                    'amount' => (float) $invoice->total,
-                    'status' => $invoice->balance > 0 ? 'Unpaid' : 'Paid',
-                ];
-            });
-
-        return Inertia::render('tenant-dashboard', [
-            'user' => [
-                'name' => $user->name,
+        return Inertia::render('tenant/dashboard', [
+            'unit' => $lease ? [
+                'unit_no'        => $lease->unit?->unit_no,
+                'apartment_name' => $lease->unit?->apartment?->name,
+                'location_name'  => $lease->unit?->apartment?->location?->name,
+                'rent'           => (float) $lease->rent,
+                'lease_start'    => $lease->start_date?->toDateString(),
+            ] : null,
+            'kpis' => [
+                'walletBalance'    => (float) $wallet->balance,
+                'totalOutstanding' => $totalOutstanding,
+                'unpaidInvoices'   => $unpaidCount,
+                'overdueInvoices'  => $overdueCount,
+                'openIssues'       => $openIssues,
+                'openMaintenance'  => $openMaintenance,
             ],
-            'totalBalance' => (float) $totalBalance,
-            'nextDue' => $nextDue ? $nextDue->format('j F Y') : null,
-            'currentInvoiceAmount' => (float) $currentInvoiceAmount,
-            'outstanding' => (float) $outstanding,
-            'walletBalance' => (float) $walletBalance,
-            'accountName' => $accountName,
-            'recentInvoices' => $recentInvoices,
+            'latestInvoices' => $latestInvoices->map(fn ($inv) => [
+                'id'      => $inv->id,
+                'number'  => $inv->number,
+                'month'   => $inv->issue_date?->format('F Y'),
+                'total'   => (float) $inv->total,
+                'balance' => (float) $inv->balance,
+                'status'  => $inv->status,
+            ])->values(),
         ]);
     }
 }

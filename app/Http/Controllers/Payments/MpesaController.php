@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers\Payments;
 
 use App\Http\Controllers\Controller;
@@ -7,24 +9,29 @@ use App\Models\DocumentCounter;
 use App\Models\Invoice;
 use App\Models\MpesaRequest;
 use App\Models\Payment;
+use App\Models\Wallet;
 use App\Services\MpesaService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 
-class MpesaController extends Controller
+final class MpesaController extends Controller
 {
     public function __construct(private readonly MpesaService $mpesa)
     {
     }
 
     /**
-     * Initiate an STK push for a given invoice. Called by an authenticated
-     * tenant (or admin on their behalf) from the invoice/pay screen.
+     * Initiate STK push for an invoice payment.
+     *
+     * Authorization: the authenticated user must be the invoice's tenant
+     * OR an admin who can view the invoice. This replaces the old Spatie
+     * 'module invoices' gate check which excluded tenants entirely.
      */
-    public function stkPush(Request $request)
+    public function stkPush(Request $request): \Illuminate\Http\RedirectResponse
     {
         $companyId = app('currentCompany')->id;
 
@@ -37,51 +44,102 @@ class MpesaController extends Controller
             'amount' => 'required|numeric|min:1',
         ]);
 
-        $invoice = Invoice::query()->where('company_id', $companyId)->findOrFail($validated['invoice_id']);
+        $invoice = Invoice::query()
+            ->where('company_id', $companyId)
+            ->findOrFail($validated['invoice_id']);
 
-        Gate::authorize('view', $invoice); // tenant can only pay invoices they can view
+        // Authorization: either the invoice's own tenant, or an admin
+        // who can view invoices via the Spatie permission gate.
+        $user = $request->user();
+        $isInvoiceTenant = $user->id === $invoice->tenant_id;
+        $isAdmin = $user->can('module invoices');
+
+        if (! $isInvoiceTenant && ! $isAdmin) {
+            abort(403, 'You can only pay your own invoices.');
+        }
 
         try {
             $response = $this->mpesa->stkPush(
                 $validated['phone'],
-                $validated['amount'],
+                (float) $validated['amount'],
                 $invoice->number,
-                "Payment for invoice {$invoice->number}"
+                "Payment for {$invoice->number}"
             );
         } catch (\RuntimeException $e) {
-            Log::error('STK push initiation failed', ['invoice_id' => $invoice->id, 'error' => $e->getMessage()]);
-            return back()->with('error', 'Could not initiate M-Pesa payment. Please try again or use another method.');
+            Log::error('STK push failed', ['invoice_id' => $invoice->id, 'error' => $e->getMessage()]);
+            return back()->with('error', 'Could not initiate M-Pesa payment. Please try again.');
         }
 
         if (! isset($response['CheckoutRequestID'])) {
-            Log::error('STK push response missing CheckoutRequestID', ['response' => $response]);
-            return back()->with('error', 'M-Pesa did not return a valid request. Please try again.');
+            return back()->with('error', 'M-Pesa did not return a valid request ID. Please try again.');
         }
 
         MpesaRequest::create([
-            'company_id' => $companyId,
-            'tenant_id' => $invoice->tenant_id,
-            'invoice_id' => $invoice->id,
+            'company_id'         => $companyId,
+            'tenant_id'          => $invoice->tenant_id,
+            'invoice_id'         => $invoice->id,   // NON-NULL → invoice payment path
             'checkout_request_id' => $response['CheckoutRequestID'],
             'merchant_request_id' => $response['MerchantRequestID'] ?? null,
-            'phone' => $validated['phone'],
-            'amount' => $validated['amount'],
-            'status' => 'pending',
+            'phone'              => $validated['phone'],
+            'amount'             => $validated['amount'],
+            'status'             => 'pending',
         ]);
 
         return back()->with('success', 'Check your phone to complete the M-Pesa payment.');
     }
 
     /**
-     * Public webhook — Safaricom posts here once the customer completes
-     * (or cancels/fails) the STK push prompt. NOT behind auth middleware;
-     * see routes/web.php for the public registration of this route.
-     *
-     * IMPORTANT: the exact shape of $request here is per Daraja's
-     * published callback format. Log the raw payload on first real
-     * test and adjust parsing if Safaricom's actual response differs.
+     * Initiate STK push for a wallet top-up.
+     * Separated from stkPush() because the intent is different:
+     * no invoice is being paid — funds go to the tenant's wallet.
      */
-    public function callback(Request $request)
+    public function walletTopUp(Request $request): \Illuminate\Http\RedirectResponse
+    {
+        $companyId = app('currentCompany')->id;
+        $user      = $request->user();
+
+        $validated = $request->validate([
+            'phone'  => 'required|string|max:15',
+            'amount' => 'required|numeric|min:1',
+        ]);
+
+        try {
+            $response = $this->mpesa->stkPush(
+                $validated['phone'],
+                (float) $validated['amount'],
+                'WALLET-TOPUP',
+                'Wallet top-up'
+            );
+        } catch (\RuntimeException $e) {
+            Log::error('Wallet top-up STK push failed', ['user_id' => $user->id, 'error' => $e->getMessage()]);
+            return back()->with('error', 'Could not initiate M-Pesa top-up. Please try again.');
+        }
+
+        if (! isset($response['CheckoutRequestID'])) {
+            return back()->with('error', 'M-Pesa did not return a valid request. Please try again.');
+        }
+
+        MpesaRequest::create([
+            'company_id'          => $companyId,
+            'tenant_id'           => $user->id,
+            'invoice_id'          => null,          // NULL → wallet top-up path
+            'checkout_request_id' => $response['CheckoutRequestID'],
+            'merchant_request_id' => $response['MerchantRequestID'] ?? null,
+            'phone'               => $validated['phone'],
+            'amount'              => $validated['amount'],
+            'status'              => 'pending',
+        ]);
+
+        return back()->with('success', 'Check your phone to complete the wallet top-up.');
+    }
+
+    /**
+     * Public Safaricom webhook — no auth, no CSRF.
+     * Bifurcates on invoice_id presence:
+     *   invoice_id set   → apply payment to invoice (+ wallet credit if overpayment)
+     *   invoice_id null  → deposit directly into tenant wallet
+     */
+    public function callback(Request $request): JsonResponse
     {
         $payload = $request->all();
         Log::info('M-Pesa callback received', ['payload' => $payload]);
@@ -97,64 +155,84 @@ class MpesaController extends Controller
             ->where('checkout_request_id', $stkCallback['CheckoutRequestID'])
             ->first();
 
-        if (! $mpesaRequest) {
-            Log::warning('M-Pesa callback for unknown CheckoutRequestID', ['checkout_request_id' => $stkCallback['CheckoutRequestID']]);
-            return response()->json(['ResultCode' => 0, 'ResultDesc' => 'Accepted']);
-        }
-
-        if (! $mpesaRequest->isPending()) {
-            // Already processed — Safaricom can retry callbacks; this
-            // makes the handler idempotent rather than double-applying
-            // a payment on a duplicate delivery.
+        if (! $mpesaRequest || ! $mpesaRequest->isPending()) {
+            // Unknown or already processed — idempotent acknowledgement.
             return response()->json(['ResultCode' => 0, 'ResultDesc' => 'Accepted']);
         }
 
         $resultCode = $stkCallback['ResultCode'] ?? null;
 
-        DB::transaction(function () use ($mpesaRequest, $stkCallback, $resultCode) {
+        DB::transaction(function () use ($mpesaRequest, $stkCallback, $resultCode): void {
             $mpesaRequest->result_payload = $stkCallback;
 
             if ($resultCode === 0) {
-                // Success — extract the M-Pesa receipt number from
-                // CallbackMetadata.Item (Daraja's slightly awkward
-                // array-of-{Name,Value} structure).
-                $items = $stkCallback['CallbackMetadata']['Item'] ?? [];
+                $items    = $stkCallback['CallbackMetadata']['Item'] ?? [];
                 $metadata = collect($items)->pluck('Value', 'Name');
+                $mpesaRef = $metadata->get('MpesaReceiptNumber');
 
                 $mpesaRequest->status = 'success';
                 $mpesaRequest->save();
 
-                $invoice = Invoice::query()->lockForUpdate()->findOrFail($mpesaRequest->invoice_id);
-
-                $companyId = $invoice->company_id;
-                $ref = sprintf(
-                    'ACC-PAY-%d-%05d',
-                    now()->year,
-                    DocumentCounter::nextNumber($companyId, 'payment')
-                );
-
-                Payment::create([
-                    'company_id' => $companyId,
-                    'ref' => $ref,
-                    'tenant_id' => $mpesaRequest->tenant_id,
-                    'invoice_id' => $invoice->id,
-                    'amount' => $mpesaRequest->amount,
-                    'method' => 'mpesa',
-                    'external_ref' => $metadata->get('MpesaReceiptNumber'),
-                    'paid_at' => now(),
-                    'created_by' => null, // system-originated, no admin actor
-                ]);
-
-                $invoice->applyPayment((float) $mpesaRequest->amount);
+                if ($mpesaRequest->invoice_id !== null) {
+                    $this->handleInvoicePayment($mpesaRequest, $mpesaRef);
+                } else {
+                    $this->handleWalletTopUp($mpesaRequest, $mpesaRef);
+                }
             } else {
-                $mpesaRequest->status = $resultCode === 1032 ? 'cancelled' : 'failed';
+                $mpesaRequest->status = ($resultCode === 1032) ? 'cancelled' : 'failed';
                 $mpesaRequest->save();
             }
         });
 
-        // Daraja expects this exact acknowledgement shape regardless of
-        // what we did internally — returning anything else can cause
-        // Safaricom to retry the callback repeatedly.
         return response()->json(['ResultCode' => 0, 'ResultDesc' => 'Accepted']);
+    }
+
+    private function handleInvoicePayment(MpesaRequest $mpesaRequest, ?string $mpesaRef): void
+    {
+        $invoice = Invoice::query()
+            ->lockForUpdate()
+            ->findOrFail($mpesaRequest->invoice_id);
+
+        $companyId = $invoice->company_id;
+
+        $ref = sprintf(
+            'ACC-PAY-%d-%05d',
+            now()->year,
+            DocumentCounter::nextNumber($companyId, 'payment')
+        );
+
+        Payment::create([
+            'company_id'   => $companyId,
+            'ref'          => $ref,
+            'tenant_id'    => $mpesaRequest->tenant_id,
+            'invoice_id'   => $invoice->id,
+            'amount'       => $mpesaRequest->amount,
+            'method'       => 'mpesa',
+            'external_ref' => $mpesaRef,
+            'paid_at'      => now(),
+            'created_by'   => null, // system-originated
+        ]);
+
+        // applyPayment() handles overpayment → wallet credit automatically.
+        $invoice->applyPayment((float) $mpesaRequest->amount);
+    }
+
+    private function handleWalletTopUp(MpesaRequest $mpesaRequest, ?string $mpesaRef): void
+    {
+        $wallet = Wallet::forTenant(
+            $mpesaRequest->company_id,
+            $mpesaRequest->tenant_id
+        );
+
+        $wallet->recordTransaction(
+            type: 'deposit',
+            amount: (float) $mpesaRequest->amount,
+            ref: "MPESA-{$mpesaRef}",
+            meta: [
+                'mpesa_ref'         => $mpesaRef,
+                'mpesa_request_id'  => $mpesaRequest->id,
+                'phone'             => $mpesaRequest->phone,
+            ]
+        );
     }
 }

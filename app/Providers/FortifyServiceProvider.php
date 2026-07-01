@@ -47,6 +47,14 @@ class FortifyServiceProvider extends ServiceProvider
         Fortify::twoFactorChallengeView(fn () => Inertia::render('auth/two-factor-challenge'));
 
         Fortify::confirmPasswordView(fn () => Inertia::render('auth/confirm-password'));
+
+        // Fortify::redirects('login', function () {
+        //     $user = auth()->user();
+        //     if ($user && $user->hasRole('tenant')) {
+        //         return '/tenant/dashboard';
+        //     }
+        //     return '/dashboard';
+        // });
     }
 
     /**

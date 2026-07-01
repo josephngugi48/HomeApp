@@ -1,7 +1,10 @@
 <?php
 
 use App\Http\Controllers\Auth\EmailVerificationController;
+use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\WelcomeController;
 use App\Http\Controllers\Dashboard\DashboardRouterController;
+use App\Http\Controllers\Dashboard\TenantDashboardController;
 use App\Http\Controllers\Locations\LocationController;
 use App\Http\Controllers\Apartments\ApartmentController;
 use App\Http\Controllers\Units\UnitController;
@@ -25,8 +28,12 @@ use App\Http\Controllers\Broadcasts\BroadcastController;
 use App\Http\Controllers\Broadcasts\SmsDeliveryController;
 use App\Http\Controllers\Broadcasts\WhatsAppWebhookController;
 //
-use App\Http\Controllers\ProfileController;
-use App\Http\Controllers\WelcomeController;
+use App\Http\Controllers\Tenant\TenantInvoiceController;
+use App\Http\Controllers\Tenant\TenantPaymentController;
+use App\Http\Controllers\Tenant\TenantWalletController;
+use App\Http\Controllers\Tenant\TenantIssueController;
+use App\Http\Controllers\Tenant\TenantMaintenanceController;
+//
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Dashboard\TwoFactorAuthentication as DashboardTwoFactorAuthenticationController;
@@ -51,19 +58,85 @@ Route::middleware('auth')->group(function () {
 });
 
 // Public webhook — Safaricom
+Route::middleware(['auth', 'verified', 'resolve.company'])
+    ->group(function () {
+        // Invoice payment STK push (tenant or admin)
+        Route::post('/mpesa/stk-push', [MpesaController::class, 'stkPush'])
+            ->name('mpesa.stk-push');
+
+        // Wallet top-up STK push (tenant only — no admin path needed)
+        Route::post('/mpesa/wallet-topup', [MpesaController::class, 'walletTopUp'])
+            ->middleware('tenant.portal')
+            ->name('mpesa.wallet-topup');
+    });
+
 // Safaricom's POST with a 419 before your controller code even runs.
 Route::post('/mpesa/callback', [MpesaController::class, 'callback'])->name('mpesa.callback');
 
 // Initiate an STK push for an invoice 
-Route::middleware('auth')->group(function () {
-    Route::post('/mpesa/stk-push', [MpesaController::class, 'stkPush'])->name('mpesa.stk-push');
-});
+// Route::middleware('auth')->group(function () {
+//     Route::post('/mpesa/stk-push', [MpesaController::class, 'stkPush'])->name('mpesa.stk-push');
+// });
 
 // Public webhooks - Broadcast
 Route::post('/webhooks/sms/delivery', [SmsDeliveryController::class, 'handle'])->name('webhooks.sms.delivery');
 Route::get('/webhooks/whatsapp', [WhatsAppWebhookController::class, 'verify']);
 Route::post('/webhooks/whatsapp', [WhatsAppWebhookController::class, 'handle'])->name('webhooks.whatsapp');
 
+// Tenant:
+Route::middleware(['auth', 'verified', 'resolve.company', 'tenant.portal'])
+    ->prefix('tenant')
+    ->name('tenant.')
+    ->group(function () {
+
+    // Dashboard
+    Route::get('/dashboard', [TenantDashboardController::class, 'index'])
+        ->name('dashboard');
+
+    // Invoices
+    Route::get('/invoices', [TenantInvoiceController::class, 'index'])
+        ->name('invoices.index');
+    Route::get('/invoices/{id}', [TenantInvoiceController::class, 'show'])
+        ->name('invoices.show')
+        ->whereNumber('id');
+
+    // Payments
+    Route::get('/payments', [TenantPaymentController::class, 'index'])
+        ->name('payments.index');
+    Route::get('/payments/export', [TenantPaymentController::class, 'export'])
+        ->name('payments.export');
+    Route::get('/invoices/{id}/pay', [TenantPaymentController::class, 'pay'])
+        ->name('invoices.pay')
+        ->whereNumber('id');
+
+    // Wallet (view only — top-up goes via /mpesa/wallet-topup below)
+    Route::get('/wallet', [TenantWalletController::class, 'index'])
+        ->name('wallet.index');
+
+    // Issues
+    Route::get('/issues', [TenantIssueController::class, 'index'])
+        ->name('issues.index');
+    Route::get('/issues/create', [TenantIssueController::class, 'create'])
+        ->name('issues.create');
+    Route::post('/issues', [TenantIssueController::class, 'store'])
+        ->name('issues.store');
+    Route::get('/issues/{id}', [TenantIssueController::class, 'show'])
+        ->name('issues.show')
+        ->whereNumber('id');
+
+    // Maintenance
+    Route::get('/maintenance', [TenantMaintenanceController::class, 'index'])
+        ->name('maintenance.index');
+    Route::get('/maintenance/create', [TenantMaintenanceController::class, 'create'])
+        ->name('maintenance.create');
+    Route::post('/maintenance', [TenantMaintenanceController::class, 'store'])
+        ->name('maintenance.store');
+    Route::get('/maintenance/{id}', [TenantMaintenanceController::class, 'show'])
+        ->name('maintenance.show')
+        ->whereNumber('id');
+});
+
+// Admin:
 Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('/tfa_prompt', [DashboardTwoFactorAuthenticationController::class, 'tfa_notice'])
@@ -74,12 +147,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('mfa.skip');
 
     // Dashboard routes
-    Route::middleware(['auth', 'verified'])->group(function () {
-        Route::get('/dashboard', [DashboardRouterController::class, 'index'])
-            ->middleware('mfa')
-            ->name('dashboard');
-        // ... other routes ...
-    });
+    Route::get('/dashboard', [DashboardRouterController::class, 'index'])
+        ->middleware('mfa')
+        ->name('dashboard');
+
     // Route::middleware('permission:module dashboard')->group(function () {
         
     //     // Dashboard route
