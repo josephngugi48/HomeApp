@@ -147,18 +147,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('mfa.skip');
 
     // Dashboard routes
-    Route::get('/dashboard', [DashboardRouterController::class, 'index'])
-        ->middleware('mfa')
-        ->name('dashboard');
-
-    // Route::middleware('permission:module dashboard')->group(function () {
-        
-    //     // Dashboard route
-    //     Route::get('/dashboard', [DashboardRouterController::class, 'index'])
+    // Route::get('/dashboard', [DashboardRouterController::class, 'index'])
     //     ->middleware('mfa')
     //     ->name('dashboard');
 
-    // });
+    // Route::middleware(['auth', 'verified', 'permission:module dashboard', 'mfa'])
+    Route::middleware(['auth', 'verified', 'mfa'])
+    ->group(function () {
+        Route::get('/dashboard', DashboardRouterController::class)->name('dashboard');
+    });
     
     // Locations management routes
     Route::middleware('permission:module locations')->group(function () {
